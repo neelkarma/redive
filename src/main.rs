@@ -32,7 +32,7 @@ fn main() -> Result<()> {
 
     let client = ClientBuilder::new().redirect(Policy::none()).build()?;
     let mut url = Url::parse(&args.url)?;
-    let mut num = 1;
+    let mut num = 0;
 
     let pb = ProgressBar::new_spinner();
     pb.enable_steady_tick(100);
@@ -65,7 +65,7 @@ fn main() -> Result<()> {
         num += 1;
     }
 
-    pb.println(format!("{} Redirection(s) -> {}", num - 1, &url));
+    pb.println(format!("{} Redirection(s) -> {}", num, &url));
 
     Ok(())
 }
