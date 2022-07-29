@@ -1,4 +1,4 @@
-use anyhow::{Error, Result};
+use anyhow::{anyhow, Result};
 use clap::Parser;
 use colored::{Color, Colorize};
 use indicatif::ProgressBar;
@@ -11,19 +11,19 @@ pub struct Args {
     pub url: String,
 }
 
-fn get_color_from_code(status: &StatusCode) -> Color {
+fn get_color_from_code(status: &StatusCode) -> Result<Color> {
     if status.is_informational() {
-        Color::Cyan
+        Ok(Color::Cyan)
     } else if status.is_success() {
-        Color::Green
+        Ok(Color::Green)
     } else if status.is_redirection() {
-        Color::Blue
+        Ok(Color::Blue)
     } else if status.is_client_error() {
-        Color::Red
+        Ok(Color::Red)
     } else if status.is_server_error() {
-        Color::Magenta
+        Ok(Color::Magenta)
     } else {
-        panic!("Invalid Status Code {}", status.as_u16());
+        Err(anyhow!("Invalid Status Code"))
     }
 }
 
@@ -47,7 +47,7 @@ fn main() -> Result<()> {
             format!("#{}:", num).bold(),
             format!(" {} ", res.status().as_u16())
                 .bold()
-                .on_color(get_color_from_code(&res.status())),
+                .on_color(get_color_from_code(&res.status())?),
             &url
         ));
 
@@ -58,7 +58,7 @@ fn main() -> Result<()> {
         url = Url::parse(
             res.headers()
                 .get("Location")
-                .ok_or(Error::msg("No Location header in 3xx response"))?
+                .ok_or(anyhow!("No Location header in 3xx response"))?
                 .to_str()?,
         )
         .expect(&format!("Invalid URL in Location Header"));
