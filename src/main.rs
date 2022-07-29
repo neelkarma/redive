@@ -45,10 +45,10 @@ fn main() -> Result<()> {
         pb.println(format!(
             "{} {} {}",
             format!("#{}:", num).bold(),
-            format!(" {} ", res.status().as_u16())
+            format!("{}", res.status().as_u16())
                 .bold()
-                .on_color(get_color_from_code(&res.status())?),
-            &url
+                .color(get_color_from_code(&res.status())?),
+            &url.as_str().dimmed()
         ));
 
         if !res.status().is_redirection() {
