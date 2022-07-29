@@ -1,8 +1,8 @@
+use anyhow::{Error, Result};
 use clap::Parser;
 use colored::{Color, Colorize};
 use indicatif::ProgressBar;
 use reqwest::{blocking::ClientBuilder, redirect::Policy, StatusCode, Url};
-use std::error::Error;
 
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
@@ -27,11 +27,11 @@ fn get_color_from_code(status: &StatusCode) -> Color {
     }
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<()> {
     let args = Args::parse();
 
     let client = ClientBuilder::new().redirect(Policy::none()).build()?;
-    let mut url = Url::parse(&args.url).expect(&format!("Invalid URL {}", &args.url));
+    let mut url = Url::parse(&args.url)?;
     let mut num = 1;
 
     let pb = ProgressBar::new_spinner();
@@ -55,8 +55,13 @@ fn main() -> Result<(), Box<dyn Error>> {
             break;
         }
 
-        url = Url::parse(res.headers().get("Location").unwrap().to_str()?)
-            .expect(&format!("Invalid URL in Location Header"));
+        url = Url::parse(
+            res.headers()
+                .get("Location")
+                .ok_or(Error::msg("No Location header in 3xx response"))?
+                .to_str()?,
+        )
+        .expect(&format!("Invalid URL in Location Header"));
         num += 1;
     }
 
