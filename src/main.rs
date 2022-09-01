@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use clap::Parser;
 use colored::{Color, Colorize};
 use indicatif::ProgressBar;
@@ -11,19 +11,19 @@ pub struct Args {
     pub url: String,
 }
 
-fn get_color_from_code(status: &StatusCode) -> Result<Color> {
+fn get_color_from_code(status: &StatusCode) -> Color {
     if status.is_informational() {
-        Ok(Color::Cyan)
+        Color::Cyan
     } else if status.is_success() {
-        Ok(Color::Green)
+        Color::Green
     } else if status.is_redirection() {
-        Ok(Color::Blue)
+        Color::Blue
     } else if status.is_client_error() {
-        Ok(Color::Red)
+        Color::Red
     } else if status.is_server_error() {
-        Ok(Color::Magenta)
+        Color::Magenta
     } else {
-        Err(anyhow!("Invalid Status Code"))
+        Color::White
     }
 }
 
@@ -31,8 +31,8 @@ fn main() -> Result<()> {
     let args = Args::parse();
 
     let client = ClientBuilder::new().redirect(Policy::none()).build()?;
-    let mut url = Url::parse(&args.url)?;
-    let mut num = 1;
+    let mut url = Url::parse(&args.url).context(format!("Invalid URL {}", &args.url))?;
+    let mut count = 1;
 
     let pb = ProgressBar::new_spinner();
     pb.enable_steady_tick(100);
@@ -40,14 +40,17 @@ fn main() -> Result<()> {
     loop {
         pb.set_message(format!("Tracing URL {}", &url));
 
-        let res = client.get(url.clone()).send()?;
+        let res = client
+            .get(url.clone())
+            .send()
+            .context(format!("Request to URL {} failed", &url))?;
 
         pb.println(format!(
             "{} {} {}",
-            format!("#{}:", num).bold(),
+            format!("#{}:", count).bold(),
             format!("{}", res.status().as_u16())
                 .bold()
-                .color(get_color_from_code(&res.status())?),
+                .color(get_color_from_code(&res.status())),
             &url.as_str().dimmed()
         ));
 
@@ -58,14 +61,14 @@ fn main() -> Result<()> {
         url = Url::parse(
             res.headers()
                 .get("Location")
-                .ok_or(anyhow!("No Location header in 3xx response"))?
+                .context("No Location header in 3xx response")?
                 .to_str()?,
         )
-        .expect(&format!("Invalid URL in Location Header"));
-        num += 1;
+        .context("Invalid URL in Location header")?;
+        count += 1;
     }
 
-    pb.println(format!("{} Redirection(s) -> {}", num - 1, &url));
+    pb.println(format!("{} Redirection(s) -> {}", count - 1, &url));
 
     Ok(())
 }
