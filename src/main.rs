@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use clap::Parser;
 use colored::{Color, Colorize};
 use indicatif::ProgressBar;
