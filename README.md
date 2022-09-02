@@ -2,7 +2,7 @@
 
 > Trace URL redirections in the terminal.
 
-![redive gif](./screencap.gif)
+![redive gif](./assets/screencap.gif)
 
 ## Installation and Usage
 
