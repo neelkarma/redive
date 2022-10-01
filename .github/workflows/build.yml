@@ -6,6 +6,8 @@ on:
     paths:
       - "**.rs"
       - "Cargo.toml"
+  schedule:
+    - cron: '0 0 1 * *'  # once a month
 
 env:
   CARGO_TERM_COLOR: always
