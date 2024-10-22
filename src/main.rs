@@ -3,6 +3,7 @@ use colored::{Color, Colorize};
 use indicatif::ProgressBar;
 use std::env;
 use ureq::AgentBuilder;
+use url::Url;
 
 fn status_to_color(status: u16) -> Color {
     match status {
@@ -52,10 +53,7 @@ impl Checker {
         ));
 
         if (300..=399).contains(&res.status()) {
-            let url = res
-                .header("Location")
-                .context("No Location header in 3xx response")?
-                .to_string();
+            let url = self.get_url(res, &cur_url)?;
             self.redirects += 1;
             return self.check(url);
         }
@@ -63,6 +61,32 @@ impl Checker {
         self.pb
             .println(format!("{} Redirect(s) -> {}", self.redirects, &cur_url));
         Ok(())
+    }
+
+    fn get_url(&self, res: ureq::Response, cur_url: &str) -> Result<String> {
+        let location = res
+            .header("Location")
+            .context("No Location header in 3xx response")?
+            .to_string();
+
+        if location.starts_with("http://") || location.starts_with("https://") {
+            return Ok(location);
+        }
+
+        let mut prev_url = Url::parse(cur_url).context("Failed to parse current url")?;
+        prev_url.set_query(None);
+        prev_url.set_fragment(None);
+
+        if location.starts_with("/") {
+            prev_url.set_path("");
+        }
+
+        let res = prev_url
+            .join(&location)
+            .context("Failed to concatenate relative Location header value to base url")?
+            .to_string();
+
+        Ok(res)
     }
 }
 
