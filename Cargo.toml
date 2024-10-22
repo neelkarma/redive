@@ -11,6 +11,7 @@ anyhow = "1.0"
 colored = "2.0"
 indicatif = "0.16"
 ureq = "2.6"
+url = "2.5.2"
 
 [profile.release]
 strip = true
