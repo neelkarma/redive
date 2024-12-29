@@ -3,6 +3,7 @@ use colored::{Color, Colorize};
 use indicatif::ProgressBar;
 use std::env;
 use ureq::AgentBuilder;
+use url::Url;
 
 fn status_to_color(status: u16) -> Color {
     match status {
@@ -15,46 +16,92 @@ fn status_to_color(status: u16) -> Color {
     }
 }
 
-fn main() -> Result<()> {
-    let mut url = env::args().nth(1).ok_or(anyhow!("No URL provided."))?;
+struct Checker {
+    agent: ureq::Agent,
+    pb: ProgressBar,
+    redirects: i32,
+    max_redirects: i32,
+}
 
-    let agent = AgentBuilder::new().redirects(0).build();
-    let mut count = 1;
+impl Checker {
+    fn new(max_redirects: i32, pb: ProgressBar) -> Self {
+        Checker {
+            agent: AgentBuilder::new().redirects(0).build(),
+            redirects: 0,
+            max_redirects,
+            pb,
+        }
+    }
 
-    let pb = ProgressBar::new_spinner();
-    pb.enable_steady_tick(100);
+    fn check(&mut self, cur_url: String) -> Result<()> {
+        if self.redirects > self.max_redirects {
+            return Err(anyhow!("Max redirects exceeded"));
+        }
 
-    loop {
-        pb.set_message(format!("Tracing {}", &url));
+        let res = self.agent.get(&cur_url).call().context(format!(
+            "Request to {} failed. Is the URL correct?",
+            &cur_url
+        ))?;
 
-        let res = agent
-            .get(&url)
-            .call()
-            .context(format!("Request to {} failed. Is the URL correct?", &url))?;
-
-        pb.println(format!(
+        self.pb.println(format!(
             "{} {} {}",
-            format!("#{}:", count).bold(),
+            format!("#{}:", self.redirects).bold(),
             format!("{}", res.status())
                 .bold()
                 .color(status_to_color(res.status())),
-            &url.dimmed()
+            &cur_url.dimmed()
         ));
 
-        // Break on a non-redirect response
-        if !(300..=399).contains(&res.status()) {
-            break;
+        if (300..=399).contains(&res.status()) {
+            let url = self.get_url(res, &cur_url)?;
+            self.redirects += 1;
+            return self.check(url);
         }
 
-        url = res
+        self.pb
+            .println(format!("{} Redirect(s) -> {}", self.redirects, &cur_url));
+        Ok(())
+    }
+
+    fn get_url(&self, res: ureq::Response, cur_url: &str) -> Result<String> {
+        let location = res
             .header("Location")
             .context("No Location header in 3xx response")?
             .to_string();
 
-        count += 1;
+        if location.starts_with("http://") || location.starts_with("https://") {
+            return Ok(location);
+        }
+
+        let mut prev_url = Url::parse(cur_url).context("Failed to parse current url")?;
+        prev_url.set_query(None);
+        prev_url.set_fragment(None);
+
+        if location.starts_with("/") {
+            prev_url.set_path("");
+        }
+
+        let res = prev_url
+            .join(&location)
+            .context("Failed to concatenate relative Location header value to base url")?
+            .to_string();
+
+        Ok(res)
     }
+}
 
-    pb.println(format!("{} Redirect(s) -> {}", count - 1, &url));
+fn main() -> Result<()> {
+    let url = env::args().nth(1).ok_or(anyhow!("No URL provided."))?;
+    let max_redirects: i32 = env::args()
+        .nth(2)
+        .unwrap_or("30".to_string())
+        .parse()
+        .map_err(|_| anyhow!("The max_redirects must be an integer"))?;
 
-    Ok(())
+    let pb = ProgressBar::new_spinner();
+    pb.enable_steady_tick(100);
+    pb.set_message(format!("Tracing {}", &url));
+
+    let mut checker = Checker::new(max_redirects, pb);
+    checker.check(url)
 }
